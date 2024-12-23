@@ -1,4 +1,5 @@
 # smith_waterman
-Implementation of the Smith-Waterman algorithm for local sequence alignment
+Python implementation of the Smith-Waterman algorithm for local sequence alignment. Uses graph representation of scoring matrix.
 
-12/22/24 - Added Graph class to represent scoring matrix (without algorithm implementation yet) and Vertex class to be used by Graph class.
+Changelog:
+- 12/22/24 - Added Graph class to represent scoring matrix (without algorithm implementation yet) and Vertex class to be used by Graph class  
