@@ -2,159 +2,134 @@
 Smith-Waterman Algorithm Implementation
 Robin Anwyl
 December 2024
-Description: Implementation of the Smith-Waterman algorithm for local sequence
-alignment.
+Description: NumPy array-based implementation of the Smith-Waterman algorithm
+for local sequence alignment.
 """
 
-class Vertex:
+import numpy as np
+import pandas as pd
+
+
+class ScoringMatrix:
     """
-    A vertex in a graph, representing an entry in a scoring matrix.
+    A class that represents the scoring matrix of the Smith-Waterman algorithm.
     Attributes:
-        id: Tuple (row, col) of entry location in scoring matrix
-        score: Score of entry in scoring matrix
-    """
-    def __init__(self, id_):
-        self.id = id_ # Tuple (row, col)
-        self.score = "empty" # Initialize empty scoring matrix
-
-    @property
-    def score(self):
-        return self.score
-
-    @score.setter
-    def score(self, new_score):
-        self.score = new_score
-
-    def __str__(self):
-        return f"{self.id}"
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class Graph:
-    """
-    A graph that represents the scoring matrix of the Smith-Waterman algorithm.
-    Attributes:
-        seq1 (str): First sequence to align
-        seq2 (str): Second sequence to align
-        nrows (int): Number of rows in scoring matrix = len(seq2)+1
-        ncols (int): Number of columns in scoring matrix = len(seq1)+1
-        vertices (list): List of lists (array) that holds the Vertex objects
-            and represents the scoring matrix
-        edges (dict): Adjacency list representation of graph that records
-            edges between each source vertex and its destination vertices.
-        hi_score: Highest score in scoring matrix
-        hi_v (list): List of ids of vertices with the highest scores
-        num_vertices (int): Number of vertices (recorded for testing)
-        num_edges (int): Number of edges (recorded for testing)
+        seq1: First sequence to align
+        seq2: Second sequence to align
+        match_score: Match score (positive int)
+        mismatch_score: Mismatch (negative int)
+        gap_penalty: Gap penalty (positive int)
+        nrows: Number of rows in scoring matrix = len(seq2)+1
+        ncols: Number of columns in scoring matrix = len(seq1)+1
+        scores: NumPy array of scoring matrix
+        disp_matrix: NumPy array of scoring matrix with directional arrows and
+            row/column headings, for printing
     Methods:
-        add_edge: Adds an edge to the graph
-        scoring_linear: Calculates scoring matrix with linear gap penalty
-        static method iter_: Iterates through a dict where each value is a list
+        score_linear(): Calculates scoring matrix with linear gap penalty
+        traceback(): Backtraces through the scoring matrix to find local
+            alignments from a given high score cell
+        find_all_alignments(): Finds all optimal alignments of seq1 and seq2
+        display(): Displays the scoring matrix with directional arrows
     """
-    def __init__(self, seq1_, seq2_):
+    def __init__(self, seq1_, seq2_, match_, mismatch_, gap_penalty_):
         """
-        Initializes graph representing the scoring matrix for the alignment of
-        two given sequences (seq1 and seq2). Stores the graph Vertex objects in
-        the array self.vertices. Sets scores of entries in row 0 and column 0
-        to 0.
+        Populates scoring matrix and display matrix.
         """
-        self.seq1 = seq1_
-        self.seq2 = seq2_
-        self.nrows = len(seq2_) + 1
-        self.ncols = len(seq1_) + 1
-        self.vertices = list()
-        self.edges = dict()
-        self.hi_score = float("-inf")
-        self.hi_v = list()
-        self.num_vertices = 0
-        self.num_edges = 0
-        # Add vertices to graph
-        for i in range(self.nrows):
-            self.vertices.append([]) # Add row to self.vertices
-            curr_row = self.vertices[i]
-            for j in range(self.ncols):
-                v = Vertex((i, j)) # Create vertex for (row, col)
-                curr_row.append(v) # Add vertex to self.vertices array
-                self.num_vertices += 1 # Increment vertex count
-        # Set row 0 scores to 0
-        for j in self.vertices[0]:
-            self.vertices[0][j].score = 0
-        # Set column 0 scores to 0
-        for i in range(self.nrows):
-            self.vertices[i][0].score = 0
+        self.seq1, self.seq2, = seq1_, seq2_
+        self.match_score, self.mismatch_score, self.gap_penalty = \
+            (match_, mismatch_, gap_penalty_)
+        self.nrows, self.ncols = len(seq1_) + 1, len(seq2_) + 1
+        self.scores = np.full((self.nrows, self.ncols), np.nan)
+        self.disp_matrix = np.full((2*self.nrows+1, 2*self.ncols+1),
+                                    " ", dtype="<U5")
+        # Populate row 0 and column 0 scores
+        self.scores[0, :] = 0
+        self.scores[:, 0] = 0
+        # Calculate scores
+        self.score_linear()
+        # Generate display matrix
+        self.display()
 
-    def add_edge(self, src_v, dst_v):
+    def score_linear(self):
         """
-        Adds a directed edge from the source vertex to the destination vertex.
-        Updates the self.edges adjacency list representation of the graph.
+        Generates scoring matrix with linear gap penalty.
         """
-        if src_v.id not in self.edges:
-            # Add new source vertex
-            self.edges[src_v.id] = [dst_v.id]
-        else:
-            # Update list of destination vertices for source vertex
-            self.edges[src_v.id].append(dst_v.id)
-        self.num_edges += 1 # Increment edge count
+        for i in range(1, self.nrows):
+            char1 = self.seq1[i-1]
+            for j in range(1, self.ncols):
+                char2 = self.seq2[j-1]
+                # Calculate similarity score between characters
+                if char1 == char2:
+                    sim_score = self.match_score
+                else:
+                    sim_score = self.mismatch_score
+                # Calculate potential score of aligning char1 and char2
+                score1 = self.scores[i-1, j-1] + sim_score
+                # Calculate potential score if seq1 has a gap
+                score2 = self.scores[i-1, j] - self.gap_penalty
+                # Calculate potential score if seq2 has a gap
+                score3 = self.scores[i, j-1] - self.gap_penalty
+                # Calculate final score
+                final_score = max(score1, score2, score3, 0)
+                # Set score
+                self.scores[i, j] = final_score
+        # Cast self.scores to integer type
+        self.scores = self.scores.astype(int)
 
-    def scoring_linear(self, match_score, mismatch_score, gap_penalty):
+    def traceback(self, i, j, align1, align2, aligns):
         """
-        Generates sequence alignment scoring matrix using the Smith-Waterman
-        algorithm with a linear gap penalty.
+        Traceback through the scoring matrix from a high score cell. Helper
+        method for find_all_alignments().
+        :param i: Row number of current cell
+        :param j: Column number of current cell
+        :param align1: Partial alignment of seq1
+        :param align2: Partial alignment of seq2
+        :param aligns: All alignments from starting cell
         """
-        curr_hi_score = float("-inf")
-        curr_hi_v = list()
+        pass
+
+    def find_all_alignments(self):
+        """
+        Finds all optimal local alignments from the scoring matrix. Backtraces
+        through the scoring matrix from all high scoring cells.
+        """
+        pass
+
+    def display(self):
+        """
+        Displays the scoring matrix with directional arrows and row/column
+        headings.
+        """
+        # Add rows and column numbers as headings
+        row1 = [" "] + [_ for i in range(self.ncols) for _ in (" ", i)]
+        col1 = [" "] + [_ for i in range(self.nrows) for _ in (" ", i)]
+        self.disp_matrix[0, :], self.disp_matrix[:, 0] = row1, col1
+        # Add sequences as row/column headings
+        len1, len2 = len(self.seq1), len(self.seq2)
+        sp3 = [" ", " ", " "]
+        row2 = sp3 + [_ for i in range(len2) for _ in (" ", self.seq2[i])]
+        col2 = sp3 + [_ for i in range(len1) for _ in (" ", self.seq1[i])]
+        self.disp_matrix[1, :], self.disp_matrix[:, 1] = row2, col2
+        # Add row/column 0 scores
+        row3 = [char for _ in range(len2) for char in (0, " ")] + [0]
+        col3 = [char for _ in range(len1) for char in (0, " ")] + [0]
+        self.disp_matrix[2, 2:], self.disp_matrix[2:, 2] = row3, col3
+        # Add rest of scoring matrix and arrows
+        self.disp_matrix[4::2, 4::2] = self.scores[1:, 1:]
         for i in range(1, self.nrows):
             for j in range(1, self.ncols):
-                # Calculate similarity score between characters
-                char1 = self.seq1[i-1]
-                char2 = self.seq2[j-1]
-                if char1 == char2:
-                    sim_score = match_score
-                else:
-                    sim_score = mismatch_score
-                # Calculate score of aligning char1 and char2
-                score1 = self.vertices[i-1][j-1].score + sim_score
-                # Calculate score if seq1 has a gap
-                score2 = self.vertices[i-1][j].score - gap_penalty
-                # Calculate score if seq2 has a gap
-                score3 = self.vertices[i][j-1].score - gap_penalty
-                final_score = max(score1, score2, score3, 0) # Calculate score
-                curr_v = self.vertices[i][j] # Current vertex
-                curr_v.score = final_score # Set score
-                # Check for high score
-                if final_score > curr_hi_score:
-                    # Update new high score and high score vertex list
-                    curr_hi_score = final_score
-                    curr_hi_v = [curr_v.id]
-                elif final_score == curr_hi_score:
-                    # Update high score vertex list
-                    curr_hi_v.append(curr_v.id)
-                # If score is nonzero, add edge to graph
-                if final_score == 0:
-                    continue
-                elif final_score == score1:
-                    self.add_edge(self.vertices[i][j], self.vertices[i-1][j-1])
-                elif final_score == score2:
-                    self.add_edge(self.vertices[i][j], self.vertices[i-1][j])
-                else:
-                    self.add_edge(self.vertices[i][j], self.vertices[i][j-1])
-        # Update final high score and high score vertices
-        self.hi_score = curr_hi_score
-        self.hi_v = curr_hi_v
-        return None
+                if self.scores[i,j] == self.scores[i-1,j-1] + self.match_score:
+                    self.disp_matrix[2*i+1, 2*j+1] = "↖"
+                if self.scores[i,j] == self.scores[i-1, j] - self.gap_penalty:
+                    self.disp_matrix[2*i+1, 2*j+2] = "↑"
+                if self.scores[i,j] == self.scores[i, j-1] - self.gap_penalty:
+                    self.disp_matrix[2*i+2, 2*j+1] = "←"
 
     def __str__(self):
-        return "\n".join([f"{e.src.id} -> {e.dst.id}" for e in
-                          Graph.iter_(self.edges)])
+        df = pd.DataFrame(self.disp_matrix)
+        return f"{df.to_string(index=False, header=False)}"
 
-    @staticmethod
-    def iter_(dict_of_lists):
-        """
-        Iterates through all items in a dict where each value is a list, such
-        as self.edges.
-        """
-        for list_ in dict_of_lists:
-            for item in dict_of_lists[list_]:
-                yield item
+
+# Testing code
+m = ScoringMatrix("GGATCGA", "GAATTCAGTTA", 5, -3, 4)
+print(m)
