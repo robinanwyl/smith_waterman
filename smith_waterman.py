@@ -205,8 +205,8 @@ class ScoringMatrix:
         df_scores = pd.DataFrame(self.disp_scores)
         df_align = pd.DataFrame(self.disp_alignments)
         to_print = \
-            (f"Scoring Matrix\n {df_scores.to_string(index=False, header=False)}" +
-            f"\n\nAlignments\n {df_align.to_string(index=False, header=False)}")
+            (f"Scoring Matrix\n{df_scores.to_string(index=False, header=False)}" +
+            f"\n\nAlignments\n{df_align.to_string(index=False, header=False)}")
         return to_print
 
 
