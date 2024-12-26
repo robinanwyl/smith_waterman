@@ -29,8 +29,6 @@ class ScoringMatrix:
             for display.
     Methods:
         score_linear(): Calculates scoring matrix with linear gap penalty
-        format_scoring_matrix(): Formats the scoring matrix with arrows and
-            row/column headings
         traceback(): Backtraces through the scoring matrix to find local
             alignments of seq1 and seq2, starting from a given high score cell
         find_all_alignments(): Finds all optimal alignments of seq1 and seq2
@@ -56,9 +54,24 @@ class ScoringMatrix:
         self.scores[0, :] = 0 # Populate row 0 with scores of 0
         self.scores[:, 0] = 0 # Populate column 0 with scores of 0
 
+        # Initial setup of self.disp_scores
+        # Add rows and column numbers as headings
+        row1 = [" "] + [_ for i in range(self.ncols) for _ in (" ", i)]
+        col1 = [" "] + [_ for i in range(self.nrows) for _ in (" ", i)]
+        self.disp_scores[0, :], self.disp_scores[:, 0] = row1, col1
+        # Add sequences as row/column headings
+        len1, len2 = len(self.seq1), len(self.seq2)
+        sp3 = [" ", " ", " "]
+        row2 = sp3 + [_ for i in range(len2) for _ in (" ", self.seq2[i])]
+        col2 = sp3 + [_ for i in range(len1) for _ in (" ", self.seq1[i])]
+        self.disp_scores[1, :], self.disp_scores[:, 1] = row2, col2
+        # Add row/column 0 scores
+        row3 = [char for _ in range(len2) for char in (0, " ")] + [0]
+        col3 = [char for _ in range(len1) for char in (0, " ")] + [0]
+        self.disp_scores[2, 2:], self.disp_scores[2:, 2] = row3, col3
+
         # Scoring and display
         self.score_linear() # Calculate scores
-        self.format_scores() # Populate formatted scoring matrix
         self.find_all_alignments() # Determine local optimal alignments
         self.format_alignments()  # Format alignments for display
 
@@ -86,41 +99,16 @@ class ScoringMatrix:
                 final_score = max(score1, score2, score3, 0)
                 # Set score
                 self.scores[i, j] = final_score
+                self.disp_scores[2*i+2, 2*j+2] = int(final_score)
+                # Add arrows to self.disp_scores
+                if final_score == score1:
+                    self.disp_scores[2 * i + 1, 2 * j + 1] = "↖"
+                if final_score == score2:
+                    self.disp_scores[2 * i + 1, 2 * j + 2] = "↑"
+                if final_score == score3:
+                    self.disp_scores[2 * i + 2, 2 * j + 1] = "←"
         # Cast self.scores to integer type
         self.scores = self.scores.astype(int)
-
-    def format_scores(self):
-        """
-        Generates formatted scoring matrix with directional arrows and
-        row/column headings.
-        """
-        # Add rows and column numbers as headings
-        row1 = [" "] + [_ for i in range(self.ncols) for _ in (" ", i)]
-        col1 = [" "] + [_ for i in range(self.nrows) for _ in (" ", i)]
-        self.disp_scores[0, :], self.disp_scores[:, 0] = row1, col1
-        # Add sequences as row/column headings
-        len1, len2 = len(self.seq1), len(self.seq2)
-        sp3 = [" ", " ", " "]
-        row2 = sp3 + [_ for i in range(len2) for _ in (" ", self.seq2[i])]
-        col2 = sp3 + [_ for i in range(len1) for _ in (" ", self.seq1[i])]
-        self.disp_scores[1, :], self.disp_scores[:, 1] = row2, col2
-        # Add row/column 0 scores
-        row3 = [char for _ in range(len2) for char in (0, " ")] + [0]
-        col3 = [char for _ in range(len1) for char in (0, " ")] + [0]
-        self.disp_scores[2, 2:], self.disp_scores[2:, 2] = row3, col3
-        # Add rest of scoring matrix and arrows
-        self.disp_scores[4::2, 4::2] = self.scores[1:, 1:]
-        for i in range(1, self.nrows):
-            for j in range(1, self.ncols):
-                if (self.scores[i, j] == self.scores[i-1, j-1] + self.match_score or
-                        self.scores[i, j] == self.scores[i-1, j-1] + self.mismatch_score):
-                    self.disp_scores[2 * i + 1, 2 * j + 1] = "↖"
-                if self.scores[i, j] == self.scores[
-                    i - 1, j] - self.gap_penalty:
-                    self.disp_scores[2 * i + 1, 2 * j + 2] = "↑"
-                if self.scores[i, j] == self.scores[
-                    i, j - 1] - self.gap_penalty:
-                    self.disp_scores[2 * i + 2, 2 * j + 1] = "←"
 
     def traceback(self, i, j, align1, align2, aligns, curr_path=None,
                   all_paths=None):
@@ -135,7 +123,6 @@ class ScoringMatrix:
         :param curr_path: (list) Current partial alignment path
         :param all_paths: (list) All optimal alignment paths
         """
-        print(f"current (i, j): ({i}, {j}), score = {self.scores[i, j]}")
         if curr_path is None:
             curr_path = list()
         if all_paths is None:
@@ -143,22 +130,11 @@ class ScoringMatrix:
 
         # Base case: stop when score = 0 (first cell of alignment)
         if self.scores[i, j] == 0:
-            print("base case")
             # Record current path
             all_paths.append(curr_path[:])
-            # Check if current path has high score
-            print(f"curr_path = {curr_path}")
-            diffs = sum([self.scores[curr_path[n][0], curr_path[n][1]] -
-                         self.scores[curr_path[n+1][0], curr_path[n+1][1]]
-                         for n in range(len(curr_path)-1)]
-                        + [self.scores[curr_path[-1][0], curr_path[-1][1]]])
-            print(f"diffs {diffs}")
-            if diffs == self.scores[curr_path[0][0], curr_path[0][1]]:
-                print(f"high score {self.scores[curr_path[0][0], curr_path[0][1]]}")
-                # Record optimal alignment
-                align1, align2 = reversed(align1), reversed(align2)
-                aligns.append(("".join(align1), "".join(align2)))
-                print(f"aligns {aligns}")
+            # Record optimal alignment
+            align1, align2 = reversed(align1), reversed(align2)
+            aligns.append(("".join(align1), "".join(align2)))
             return
 
         # Mark cell as visited
@@ -169,27 +145,15 @@ class ScoringMatrix:
 
         # Move diagonally ↖ (match)
         if self.disp_scores[2 * i + 1, 2 * j + 1] == "↖":
-            print(f"align1 {align1}, align2 {align2}")
-            print(f"aligns {aligns}")
-            print("↖")
-            print(f"next (i, j) {(i-1, j-1)}")
             dirs.append(("↖", i-1, j-1, align1 + [self.seq1[i-1]], align2 +
                          [self.seq2[j-1]]))
 
         # Move vertically ↑ (gap in seq2)
         if self.disp_scores[2 * i + 1, 2 * j + 2] == "↑":
-            print(f"align1 {align1}, align2 {align2}")
-            print(f"aligns {aligns}")
-            print("↑")
-            print(f"next (i, j) {(i-1, j)}")
             dirs.append(("↑", i-1, j, align1+[self.seq1[i-1]], align2 + ["-"]))
 
         # Move horizontally ← (gap in seq1)
         if self.disp_scores[2 * i + 2, 2 * j + 1] == "←":
-            print(f"align1 {align1}, align2 {align2}")
-            print(f"aligns {aligns}")
-            print("←")
-            print(f"next (i, j) {(i, j-1)}")
             dirs.append(("←", i, j-1, align1+["-"], align2+[self.seq2[j-1]]))
 
         # Recurse in each direction
@@ -213,10 +177,8 @@ class ScoringMatrix:
         for i in range(self.nrows):
             for j in range(self.ncols):
                 if self.scores[i, j] == max_score:
-                    print("find_all_alignments(): max score found")
                     self.traceback(i, j, [], [], all_aligns)
         self.alignments = all_aligns
-        print(f"all alignments: {self.alignments}")
 
     def format_alignments(self):
         """
@@ -242,8 +204,9 @@ class ScoringMatrix:
     def __str__(self):
         df_scores = pd.DataFrame(self.disp_scores)
         df_align = pd.DataFrame(self.disp_alignments)
-        to_print = f"{df_scores.to_string(index=False, header=False)}" + \
-                    "\n\n" + f"{df_align.to_string(index=False, header=False)}"
+        to_print = \
+            (f"Scoring Matrix\n {df_scores.to_string(index=False, header=False)}" +
+            f"\n\nAlignments\n {df_align.to_string(index=False, header=False)}")
         return to_print
 
 
