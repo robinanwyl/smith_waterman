@@ -3,16 +3,18 @@ Smith-Waterman Algorithm Implementation
 Robin Anwyl
 December 2024
 Description: NumPy array-based implementation of the Smith-Waterman algorithm
-for local sequence alignment.
+for local sequence alignment, using a linear gap penalty.
 """
 
 import numpy as np
 import pandas as pd
 
 
-class ScoringMatrix:
+class SmithWatermanLinear:
     """
-    A class that represents the scoring matrix of the Smith-Waterman algorithm.
+    A class that implements the Smith-Waterman algorithm to perform local
+    sequence alignment, with a linear gap penalty. For best results, provided
+    sequences should not contain gaps.
     Attributes:
         seq1: First sequence to align
         seq2: Second sequence to align
@@ -29,33 +31,28 @@ class ScoringMatrix:
         disp_alignments: NumPy array of optimal local alignments, formatted
             for display.
     Methods:
-        score_linear(): Calculates scoring matrix with linear gap penalty
-        traceback(): Backtraces through the scoring matrix to find local
-            alignments of seq1 and seq2, starting from a given high score cell
+        score_linear(): Performs scoring with linear gap penalty
+        traceback(): Performs traceback through the scoring matrix, starting
+            from a given high score cell
         find_all_alignments(): Finds all optimal alignments of seq1 and seq2
-        sequence_alignment(): Calculates scoring matrix, finds all
+        sequence_alignment(): Calculates scoring matrix, finds all optimal
             alignments, and formats scoring matrix and alignments for display
     """
     def __init__(self, seq1_, seq2_, match_, mismatch_, gap_penalty_):
         """
-        Populates scoring matrix and determines optimal local alignments
-        using Smith-Waterman algorithm with linear gap penalty. Formats
-        scoring matrix and alignments for display.
+        Initializes class attributes. Performs initial setup of self.scores
+        (scoring matrix) and self.disp_scores (scoring matrix formatted for
+        display and used by score_linear() method).
         """
         self.seq1, self.seq2, = seq1_, seq2_
         self.match_score, self.mismatch_score, self.gap_penalty = \
             (match_, mismatch_, gap_penalty_)
-        self.nrows, self.ncols = len(seq1_) + 1, len(seq2_) + 1
-        self.scores = np.full((self.nrows, self.ncols), np.nan)
-        self.disp_scores = np.full((2*self.nrows + 1, 2*self.ncols + 1),
-                                    " ", dtype="<U5")
+        self.nrows, self.ncols = len(seq1_)+1, len(seq2_)+1
+        self.scores = np.full((self.nrows, self.ncols), 0)
+        self.disp_scores = np.full((2*self.nrows+1, 2*self.ncols+1)," ", dtype="<U5")
         self.high_score = 0
         self.alignments = list()
         self.disp_alignments = list()
-
-        # Initial setup of self.scores
-        self.scores[0, :] = 0 # Populate row 0 with scores of 0
-        self.scores[:, 0] = 0 # Populate column 0 with scores of 0
 
         # Initial setup of self.disp_scores
         # Add rows and column numbers as headings
@@ -75,69 +72,54 @@ class ScoringMatrix:
 
     def score_linear(self):
         """
-        Generates scoring matrix with linear gap penalty. Populates self.scores
-        and self.disp_scores.
+        Perform scoring with linear gap penalty. Fills self.scores and
+        self.disp_scores.
         """
-        gap_chars = ["-", "_"]
         for i in range(1, self.nrows):
             char1 = self.seq1[i-1]
             for j in range(1, self.ncols):
                 char2 = self.seq2[j-1]
                 # Calculate similarity score between characters
-                if char1 == char2: # Match -> match score
+                if char1 == char2:
                     sim_score = self.match_score
                 else:
-                    # Gap in either sequence -> gap penalty
-                    if (char1 in gap_chars or char1.strip() == "" or char2 in
-                            gap_chars or char2.strip() == ""):
-                        sim_score = -1*self.gap_penalty
-                    else: # Two mismatched nucleotides -> mismatch score
-                        sim_score = self.mismatch_score
+                    sim_score = self.mismatch_score
                 # Calculate potential score of aligning char1 and char2
                 score1 = self.scores[i-1, j-1] + sim_score
                 # Calculate potential score if seq1 has a gap
                 score2 = self.scores[i-1, j] - self.gap_penalty
                 # Calculate potential score if seq2 has a gap
                 score3 = self.scores[i, j-1] - self.gap_penalty
-                # Calculate final score
+                # Calculate and set final score
                 final_score = max(score1, score2, score3, 0)
-                # Set score
                 self.scores[i, j] = final_score
-                self.disp_scores[2*i+2, 2*j+2] = int(final_score)
-                # Add arrows to self.disp_scores
+                # Update self.disp_scores
+                self.disp_scores[2*i+2, 2*j+2] = final_score
                 if final_score == score1:
                     self.disp_scores[2 * i + 1, 2 * j + 1] = "↖"
                 if final_score == score2:
                     self.disp_scores[2 * i + 1, 2 * j + 2] = "↑"
                 if final_score == score3:
                     self.disp_scores[2 * i + 2, 2 * j + 1] = "←"
-        # Cast self.scores to integer type
-        self.scores = self.scores.astype(int)
-        # Record high score
         self.high_score = np.max(self.scores)
 
-    def traceback(self, i, j, align1, align2, aligns, curr_path=None,
-                  all_paths=None):
+    def traceback(self, i, j, align1, align2, aligns, curr_path=None, all_paths=None):
         """
-        Performs traceback through the scoring matrix from a high score cell.
-        Helper method for find_all_alignments().
+        Recursive method to perform traceback through the scoring matrix from a
+        high score cell, finding all possible paths. Helper method for
+        find_all_alignments().
         :param i: (int) Row number of current cell
         :param j: (int) Column number of current cell
         :param align1: (list) Partial alignment of seq1 in current path
         :param align2: (list) Partial alignment of seq2 in current path
         :param aligns: (list of tuples) All optimal alignments of seq1 and seq2
         :param curr_path: (list) Current partial alignment path
-        :param all_paths: (list) All optimal alignment paths
         """
         if curr_path is None:
             curr_path = list()
-        if all_paths is None:
-            all_paths = list()
 
         # Base case: stop when score = 0 (first cell of alignment)
         if self.scores[i, j] == 0:
-            # Record current path
-            all_paths.append(curr_path[:])
             # Record optimal alignment
             if align1 and align2:
                 align1, align2 = reversed(align1), reversed(align2)
@@ -166,7 +148,7 @@ class ScoringMatrix:
         # Recurse in each direction
         for direction, next_i, next_j, next_align1, next_align2 in dirs:
             self.traceback(next_i, next_j, next_align1, next_align2, aligns,
-                           curr_path[:], all_paths)
+                           curr_path[:])
 
         # Traceback - remove current cell from path
         curr_path.pop()
@@ -175,8 +157,8 @@ class ScoringMatrix:
 
     def find_all_alignments(self):
         """
-        Finds all optimal local alignments from the scoring matrix -
-        backtracks through the scoring matrix from all high scoring cells.
+        Finds all optimal alignments from the scoring matrix (by performing
+        a traceback through the scoring matrix from all high scoring cells).
         Formats alignments for printing.
         """
         # Find alignments
@@ -187,12 +169,10 @@ class ScoringMatrix:
                 if self.scores[i, j] == self.high_score:
                     self.traceback(i, j, [], [], all_aligns)
         self.alignments = all_aligns
-        print(f"self.alignments = {self.alignments}")
 
         # Format alignments
         # Get lengths of all sequences in optimal alignments
         all_aligns = [seq for align in self.alignments for seq in align]
-        print(f"all_aligns = {all_aligns}")
         seq_lens = [len(s) for s in all_aligns]
         # Generate matrix to display optimal alignments
         m_rows = len(all_aligns) + len(self.alignments) - 1
@@ -236,11 +216,3 @@ class ScoringMatrix:
                 (f"Scoring Matrix\n{df_scores.to_string(index=False, header=False)}"
                 + f"\n\nAlignments\n{self.alignments}")
         return to_print
-
-
-# Testing code
-matrix = ScoringMatrix("AC-GT", "ACG-T", 2, -1, 3)
-matrix.sequence_alignment()
-print(matrix.high_score)
-print(matrix.alignments)
-print(matrix)
