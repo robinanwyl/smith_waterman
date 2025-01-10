@@ -9,12 +9,11 @@ for local sequence alignment, using a linear gap penalty.
 import numpy as np
 import pandas as pd
 
-
 class SmithWatermanLinear:
     """
-    A class that implements the Smith-Waterman algorithm to perform local
-    sequence alignment, with a linear gap penalty. For best results, provided
-    sequences should not contain gaps.
+    Implement the Smith-Waterman algorithm to perform local sequence alignment,
+    using a linear gap penalty. (For best results, the given sequences should
+    not contain gaps.)
     Attributes:
         seq1: First sequence to align
         seq2: Second sequence to align
@@ -31,16 +30,17 @@ class SmithWatermanLinear:
         disp_alignments: NumPy array of optimal local alignments, formatted
             for display.
     Methods:
-        score_linear(): Performs scoring with linear gap penalty
-        traceback(): Performs traceback through the scoring matrix, starting
+        score_linear(): Perform scoring with linear gap penalty
+        traceback(): Perform traceback through the scoring matrix, starting
             from a given high score cell
-        find_all_alignments(): Finds all optimal alignments of seq1 and seq2
-        sequence_alignment(): Calculates scoring matrix, finds all optimal
-            alignments, and formats scoring matrix and alignments for display
+        find_all_alignments(): Find all optimal alignments of seq1 and seq2
+        sequence_alignment(): Calculate scoring matrix, find all optimal
+            alignments, and format scoring matrix and alignments for display
     """
-    def __init__(self, seq1_, seq2_, match_, mismatch_, gap_penalty_):
+    def __init__(self, seq1_: str, seq2_: str, match_: int, mismatch_: int,
+                 gap_penalty_: int):
         """
-        Initializes class attributes. Performs initial setup of self.scores
+        Initialize class attributes and perform initial setup of self.scores
         (scoring matrix) and self.disp_scores (scoring matrix formatted for
         display and used by score_linear() method).
         """
@@ -72,7 +72,7 @@ class SmithWatermanLinear:
 
     def score_linear(self):
         """
-        Perform scoring with linear gap penalty. Fills self.scores and
+        Perform scoring with linear gap penalty. Fill self.scores and
         self.disp_scores.
         """
         for i in range(1, self.nrows):
@@ -103,17 +103,18 @@ class SmithWatermanLinear:
                     self.disp_scores[2 * i + 2, 2 * j + 1] = "←"
         self.high_score = np.max(self.scores)
 
-    def traceback(self, i, j, align1, align2, aligns, curr_path=None, all_paths=None):
+    def traceback(self, i: int, j: int, align1: list, align2: list,
+                  aligns: list[tuple[str, str]], curr_path=None):
         """
-        Recursive method to perform traceback through the scoring matrix from a
+        Use recursion to perform traceback through the scoring matrix from a
         high score cell, finding all possible paths. Helper method for
         find_all_alignments().
-        :param i: (int) Row number of current cell
-        :param j: (int) Column number of current cell
-        :param align1: (list) Partial alignment of seq1 in current path
-        :param align2: (list) Partial alignment of seq2 in current path
-        :param aligns: (list of tuples) All optimal alignments of seq1 and seq2
-        :param curr_path: (list) Current partial alignment path
+        :param i: Row number of current cell
+        :param j: Column number of current cell
+        :param align1: Partial alignment of seq1 in current path
+        :param align2: Partial alignment of seq2 in current path
+        :param aligns: All optimal alignments of seq1 and seq2
+        :param curr_path: Current partial alignment path
         """
         if curr_path is None:
             curr_path = list()
@@ -157,9 +158,9 @@ class SmithWatermanLinear:
 
     def find_all_alignments(self):
         """
-        Finds all optimal alignments from the scoring matrix (by performing
+        Find all optimal alignments from the scoring matrix (by performing
         a traceback through the scoring matrix from all high scoring cells).
-        Formats alignments for printing.
+        Format alignments for printing.
         """
         # Find alignments
         all_aligns = list()
@@ -188,8 +189,8 @@ class SmithWatermanLinear:
 
     def sequence_alignment(self):
         """
-        Populates scoring matrix and formats it for display. Finds all optimal
-        local alignments and formats them for display.
+        Populate scoring matrix and formats it for display. Find all optimal
+        local alignments and format them for display.
         """
         # Error if sequence is empty string, whitespace, or None
         if (not self.seq1 or not self.seq2 or self.seq1.strip() == "" or
@@ -205,14 +206,17 @@ class SmithWatermanLinear:
         self.find_all_alignments()
 
     def __str__(self):
+        """
+        Return a string representation of the scoring matrix and alignments.
+        """
         df_scores = pd.DataFrame(self.disp_scores)
         if self.alignments:
             df_align = pd.DataFrame(self.disp_alignments)
-            to_print = \
+            str_rep = \
                 (f"Scoring Matrix\n{df_scores.to_string(index=False, header=False)}"
                  + f"\n\nAlignments\n{df_align.to_string(index=False, header=False)}")
         else: # If no alignments, don't print disp_alignments
-            to_print = \
+            str_rep = \
                 (f"Scoring Matrix\n{df_scores.to_string(index=False, header=False)}"
                 + f"\n\nAlignments\n{self.alignments}")
-        return to_print
+        return str_rep
